@@ -1,5 +1,44 @@
-> [!CAUTION]
-> Fork 自 https://github.com/hamster1963/nezha-dash-v1
+# nezha-dash-v1-komari
+
+基于 [Akizon77/nezha-dash-v1](https://github.com/Akizon77/nezha-dash-v1) 二次修改的 Komari 监控面板主题。
+
+原始项目 Fork 自 [hamster1963/nezha-dash-v1](https://github.com/hamster1963/nezha-dash-v1)。
+
+## 主要改动
+
+- 流量进度条组件（TrafficInfo），支持 sum/max/min/up/down 计费模式
+- `deriveCycleLabel` 支持 2 年、3 年等多年周期显示
+- 概览卡片标题前增加 lucide-react 图标
+- 详情页与网络页可合并为一页
+- 套餐标签可隐藏
+- 移除未实现的 ServiceTracker 按钮
+- `parsePublicNote` 静默 JSON 解析错误
+- 修复 deprecated `apple-mobile-web-app-capable` meta 标签
+
+## 编译部署
+
+### 环境要求
+
+- [Node.js](https://nodejs.org/) >= 18
+- npm（随 Node.js 一起安装）
+
+### 步骤
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/telly3e/nezha-dash-v1-komari.git
+cd nezha-dash-v1-komari
+
+# 2. 安装依赖
+npm install
+
+# 3. 编译
+npm run build
+```
+
+编译产物在 `dist/` 目录下，将其部署到 Komari 即可。
+
+```
 
 ## 自定义代码设置
 
