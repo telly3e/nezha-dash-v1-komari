@@ -3,7 +3,6 @@ import GroupSwitch from "@/components/GroupSwitch"
 import ServerCard from "@/components/ServerCard"
 import ServerCardInline from "@/components/ServerCardInline"
 import ServerOverview from "@/components/ServerOverview"
-import { ServiceTracker } from "@/components/ServiceTracker"
 import { Loader } from "@/components/loading/Loader"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -16,7 +15,7 @@ import { fetchServerGroup } from "@/lib/nezha-api"
 import { cn, formatNezhaInfo } from "@/lib/utils"
 import { NezhaWebsocketResponse } from "@/types/nezha-api"
 import { ServerGroup } from "@/types/nezha-api"
-import { ArrowDownIcon, ArrowUpIcon, ArrowsUpDownIcon, ChartBarSquareIcon, MapIcon, ViewColumnsIcon } from "@heroicons/react/20/solid"
+import { ArrowDownIcon, ArrowUpIcon, ArrowsUpDownIcon, MapIcon, ViewColumnsIcon } from "@heroicons/react/20/solid"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -30,7 +29,6 @@ export default function Servers() {
   })
   const { lastMessage, connected } = useWebSocketContext()
   const { status } = useStatus()
-  const [showServices, setShowServices] = useState<string>("0")
   const [showMap, setShowMap] = useState<string>("0")
   const [inline, setInline] = useState<string>("0")
   const containerRef = useRef<HTMLDivElement>(null)
@@ -51,15 +49,6 @@ export default function Servers() {
     sessionStorage.setItem("selectedGroup", newGroup)
     sessionStorage.setItem("scrollPosition", String(containerRef.current?.scrollTop || 0))
   }
-
-  useEffect(() => {
-    const showServicesState = localStorage.getItem("showServices")
-    if (window.ForceShowServices) {
-      setShowServices("1")
-    } else if (showServicesState !== null) {
-      setShowServices(showServicesState)
-    }
-  }, [])
 
   useEffect(() => {
     const checkInlineSettings = () => {
@@ -261,28 +250,6 @@ export default function Servers() {
           </button>
           <button
             onClick={() => {
-              setShowServices(showServices === "0" ? "1" : "0")
-              localStorage.setItem("showServices", showServices === "0" ? "1" : "0")
-            }}
-            className={cn(
-              "rounded-[50px] bg-white dark:bg-stone-800 cursor-pointer p-[10px] transition-all border dark:border-none border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]",
-              {
-                "shadow-[inset_0_1px_0_rgba(0,0,0,0.2)] !bg-blue-600 hover:!bg-blue-600 border-blue-600 dark:border-blue-600": showServices === "1",
-                "text-white": showServices === "1",
-              },
-              {
-                "bg-opacity-70 dark:bg-opacity-70": customBackgroundImage,
-              },
-            )}
-          >
-            <ChartBarSquareIcon
-              className={cn("size-[13px]", {
-                "text-white": showServices === "1",
-              })}
-            />
-          </button>
-          <button
-            onClick={() => {
               setInline(inline === "0" ? "1" : "0")
               localStorage.setItem("inline", inline === "0" ? "1" : "0")
             }}
@@ -365,7 +332,6 @@ export default function Servers() {
         </Popover>
       </div>
       {showMap === "1" && <GlobalMap now={nezhaWsData.now} serverList={nezhaWsData?.servers || []} />}
-      {showServices === "1" && <ServiceTracker serverList={filteredServers} />}
       {inline === "1" && (
         <section ref={containerRef} className="flex flex-col gap-2 overflow-x-scroll scrollbar-hidden mt-6 server-inline-list">
           {filteredServers.map((serverInfo) => (

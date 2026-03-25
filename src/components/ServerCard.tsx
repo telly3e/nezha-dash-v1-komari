@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 
 import PlanInfo from "./PlanInfo"
+import TrafficInfo from "./TrafficInfo"
 import BillingInfo from "./billingInfo"
 import { Badge } from "./ui/badge"
 import { Card } from "./ui/card"
@@ -34,6 +35,9 @@ export default function ServerCard({ now, serverInfo }: { now: number; serverInf
 
   // @ts-expect-error FixedTopServerName is a global variable
   const fixedTopServerName = window.FixedTopServerName as boolean
+
+  // @ts-expect-error ShowTrafficBar is a global variable
+  const showTrafficBar = window.ShowTrafficBar as boolean
 
   const parsedData = parsePublicNote(public_note)
 
@@ -145,6 +149,7 @@ export default function ServerCard({ now, serverInfo }: { now: number; serverInf
           </section>
         )}
         {parsedData?.planDataMod && <PlanInfo parsedData={parsedData} />}
+        {showTrafficBar && parsedData?.planDataMod && <TrafficInfo parsedData={parsedData} serverInfo={serverInfo} />}
       </div>
     </Card>
   ) : (

@@ -1,6 +1,10 @@
 import { PublicNoteData, cn } from "@/lib/utils"
 
 export default function PlanInfo({ parsedData }: { parsedData: PublicNoteData }) {
+  // @ts-expect-error HidePlanInfo is a global variable
+  const hidePlanInfo = window.HidePlanInfo as boolean
+  if (hidePlanInfo) return null
+
   if (!parsedData || !parsedData.planDataMod) {
     return null
   }

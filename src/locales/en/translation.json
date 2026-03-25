@@ -91,6 +91,13 @@
     "ru-RU": "Русский",
     "ta-IN": "தமிழ்"
   },
+  "themeSettings": {
+    "title": "Theme Settings",
+    "showTrafficBar": "Show Traffic Bar",
+    "mergeDetailAndNetwork": "Merge Detail & Network",
+    "networkFirst": "Network First",
+    "hidePlanInfo": "Hide Plan Labels"
+  },
   "theme": {
     "light": "Light",
     "dark": "Dark",
@@ -115,6 +122,9 @@
     "offlineReady": "App ready to work offline",
     "newContent": "New content available",
     "reload": "Update"
+  },
+  "trafficInfo": {
+    "used": "Used"
   },
   "billingInfo": {
     "remaining": "Remaining",

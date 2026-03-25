@@ -13,6 +13,11 @@ export default function ServerDetail() {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" })
   }, [])
 
+  // @ts-expect-error MergeDetailAndNetwork is a global variable
+  const mergePages = window.MergeDetailAndNetwork as boolean
+  // @ts-expect-error NetworkFirst is a global variable
+  const networkFirst = window.NetworkFirst as boolean
+
   const tabs = ["Detail", "Network"]
   const [currentTab, setCurrentTab] = useState(tabs[0])
 
@@ -21,6 +26,31 @@ export default function ServerDetail() {
   if (!server_id) {
     navigate("/404")
     return null
+  }
+
+  if (mergePages) {
+    const detailSection = <ServerDetailChart server_id={server_id} />
+    const networkSection = <NetworkChart server_id={Number(server_id)} show={true} />
+
+    return (
+      <div className="mx-auto w-full max-w-5xl px-0 flex flex-col gap-4 server-info">
+        <ServerDetailOverview server_id={server_id} />
+        <Separator />
+        {networkFirst ? (
+          <>
+            {networkSection}
+            <Separator />
+            {detailSection}
+          </>
+        ) : (
+          <>
+            {detailSection}
+            <Separator />
+            {networkSection}
+          </>
+        )}
+      </div>
+    )
   }
 
   return (

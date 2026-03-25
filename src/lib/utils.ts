@@ -236,6 +236,7 @@ interface BillingData {
 interface PlanData {
   bandwidth: string
   trafficVol: string
+  trafficVolBytes: number
   trafficType: string
   IPv4: string
   IPv6: string
@@ -273,6 +274,7 @@ export function parsePublicNote(publicNote: string): PublicNoteData | null {
         planDataMod: {
           bandwidth: data.planDataMod.bandwidth || "",
           trafficVol: data.planDataMod.trafficVol || "",
+          trafficVolBytes: Number(data.planDataMod.trafficVolBytes) || 0,
           trafficType: data.planDataMod.trafficType || "",
           IPv4: data.planDataMod.IPv4 || "",
           IPv6: data.planDataMod.IPv6 || "",
@@ -293,6 +295,7 @@ export function parsePublicNote(publicNote: string): PublicNoteData | null {
       planDataMod: {
         bandwidth: data.planDataMod.bandwidth || "",
         trafficVol: data.planDataMod.trafficVol || "",
+        trafficVolBytes: Number(data.planDataMod.trafficVolBytes) || 0,
         trafficType: data.planDataMod.trafficType || "",
         IPv4: data.planDataMod.IPv4 || "",
         IPv6: data.planDataMod.IPv6 || "",
@@ -300,8 +303,7 @@ export function parsePublicNote(publicNote: string): PublicNoteData | null {
         extra: data.planDataMod.extra || "",
       },
     }
-  } catch (error) {
-    console.error("Error parsing public note:", error)
+  } catch {
     return null
   }
 }
@@ -343,7 +345,10 @@ const countryFlagToCode = (flag: string): string => {
 function deriveCycleLabel(billing_cycle?: number): string {
   const bc = Number(billing_cycle || 0)
   if (!bc) return ""
-  if (bc >= 360) return "年"
+  if (bc >= 360) {
+    const years = Math.round(bc / 365)
+    return years > 1 ? `${years}年` : "年"
+  }
   if (bc >= 180) return "半年"
   if (bc >= 90) return "季"
   if (bc >= 30) return "月"
@@ -440,6 +445,7 @@ function buildPublicNoteFromNode(server: any, existingPublicNote?: string): stri
         bandwidth: existing?.planDataMod?.bandwidth || "",
         // 当 traffic_limit==0 时，不从节点写入流量信息
         trafficVol: existing?.planDataMod?.trafficVol || trafficVol,
+        trafficVolBytes: existing?.planDataMod?.trafficVolBytes || (hasTraffic ? trafficLimitNum : 0),
         trafficType: existing?.planDataMod?.trafficType || trafficTypeFromNode,
         IPv4: existing?.planDataMod?.IPv4 || (server?.ipv4 ? "1" : ""),
         IPv6: existing?.planDataMod?.IPv6 || (server?.ipv6 ? "1" : ""),

@@ -92,6 +92,13 @@
     "ta-IN": "தமிழ்",
     "ru-RU": "Русский"
   },
+  "themeSettings": {
+    "title": "主题设置",
+    "showTrafficBar": "显示流量进度条",
+    "mergeDetailAndNetwork": "合并详情与网络页",
+    "networkFirst": "网络优先显示",
+    "hidePlanInfo": "隐藏套餐标签"
+  },
   "theme": {
     "light": "亮色",
     "dark": "暗色",
@@ -116,6 +123,9 @@
     "offlineReady": "应用可以离线使用了",
     "newContent": "发现新版本",
     "reload": "更新"
+  },
+  "trafficInfo": {
+    "used": "已用流量"
   },
   "billingInfo": {
     "remaining": "剩余天数",
