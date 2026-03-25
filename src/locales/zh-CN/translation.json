@@ -92,14 +92,7 @@
     "ta-IN": "தமிழ்",
     "ru-RU": "Русский"
   },
-  "themeSettings": {
-    "title": "主题设置",
-    "showTrafficBar": "显示流量进度条",
-    "mergeDetailAndNetwork": "合并详情与网络页",
-    "networkFirst": "网络优先显示",
-    "hidePlanInfo": "隐藏套餐标签"
-  },
-  "theme": {
+"theme": {
     "light": "亮色",
     "dark": "暗色",
     "system": "跟随系统"

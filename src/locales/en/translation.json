@@ -91,14 +91,7 @@
     "ru-RU": "Русский",
     "ta-IN": "தமிழ்"
   },
-  "themeSettings": {
-    "title": "Theme Settings",
-    "showTrafficBar": "Show Traffic Bar",
-    "mergeDetailAndNetwork": "Merge Detail & Network",
-    "networkFirst": "Network First",
-    "hidePlanInfo": "Hide Plan Labels"
-  },
-  "theme": {
+"theme": {
     "light": "Light",
     "dark": "Dark",
     "system": "System"
