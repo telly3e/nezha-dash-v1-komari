@@ -153,6 +153,7 @@ export const NetworkChartClient = React.memo(function NetworkChart({
 
   // Change from string to string array for multi-selection
   const [activeCharts, setActiveCharts] = React.useState<string[]>([])
+  const [hiddenCharts, setHiddenCharts] = React.useState<Set<string>>(new Set())
   const [isPeakEnabled, setIsPeakEnabled] = React.useState(forcePeakCutEnabled)
 
   // Function to clear all selected charts
@@ -160,8 +161,22 @@ export const NetworkChartClient = React.memo(function NetworkChart({
     setActiveCharts([])
   }, [])
 
+  // Toggle legend item visibility
+  const handleLegendClick = useCallback((dataKey: string) => {
+    setHiddenCharts((prev) => {
+      const next = new Set(prev)
+      if (next.has(dataKey)) {
+        next.delete(dataKey)
+      } else {
+        next.add(dataKey)
+      }
+      return next
+    })
+  }, [])
+
   // Updated to handle multiple selections
   const handleButtonClick = useCallback((chart: string) => {
+    setHiddenCharts(new Set())
     setActiveCharts((prev) => {
       // If chart is already selected, remove it
       if (prev.includes(chart)) {
@@ -240,41 +255,43 @@ export const NetworkChartClient = React.memo(function NetworkChart({
       // Multiple charts selected - show only delay lines for selected monitors
       elements.push(
         ...activeCharts.map((chart) => (
-          <Line
-            key={chart}
-            isAnimationActive={false}
-            strokeWidth={1}
-            type="linear"
-            dot={false}
-            dataKey={chart}
-            stroke={getColorByIndex(chart)}
-            name={chart}
-            connectNulls={true}
-            yAxisId="delay"
-          />
-        )),
+            <Line
+              key={chart}
+              isAnimationActive={false}
+              strokeWidth={1}
+              type="linear"
+              dot={false}
+              dataKey={chart}
+              stroke={getColorByIndex(chart)}
+              name={chart}
+              connectNulls={true}
+              yAxisId="delay"
+              hide={hiddenCharts.has(chart)}
+            />
+          )),
       )
     } else {
       // No selection - show all charts (default view)
       elements.push(
         ...chartDataKey.map((key) => (
-          <Line
-            key={key}
-            isAnimationActive={false}
-            strokeWidth={1}
-            type="linear"
-            dot={false}
-            dataKey={key}
-            stroke={getColorByIndex(key)}
-            connectNulls={true}
-            yAxisId="delay"
-          />
-        )),
+            <Line
+              key={key}
+              isAnimationActive={false}
+              strokeWidth={1}
+              type="linear"
+              dot={false}
+              dataKey={key}
+              stroke={getColorByIndex(key)}
+              connectNulls={true}
+              yAxisId="delay"
+              hide={hiddenCharts.has(key)}
+            />
+          )),
       )
     }
 
     return elements
-  }, [activeCharts, chartDataKey, getColorByIndex])
+  }, [activeCharts, chartDataKey, getColorByIndex, hiddenCharts])
 
   const processedData = useMemo(() => {
     // Special handling for single chart selection
@@ -496,7 +513,7 @@ export const NetworkChartClient = React.memo(function NetworkChart({
                   />
                 }
               />
-              {activeCharts.length !== 1 && <ChartLegend content={<ChartLegendContent />} />}
+              {activeCharts.length !== 1 && <ChartLegend content={<ChartLegendContent hiddenKeys={hiddenCharts} onClickLegend={handleLegendClick} />} />}
               {chartElements}
             </ComposedChart>
           </ChartContainer>
