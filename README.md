@@ -14,6 +14,9 @@
 - 移除未实现的 ServiceTracker 按钮
 - `parsePublicNote` 静默 JSON 解析错误
 - 修复 deprecated `apple-mobile-web-app-capable` meta 标签
+- 支持通过标签过滤"已出"机器（不参与统计与地图点亮，可在"已出"分组中查看）
+- 网络监控卡片延迟/丢包/波动指标可按数值着色（绿/黄/红）
+- 波动值采用 Logistic 归一化算法（P95-P50 稳健极差，1小时窗口），结果归一化至 [0, 1)
 
 ## 编译部署
 
@@ -83,6 +86,28 @@ npm run build
 | `window.ShowTrafficBar` | boolean | `false` | 显示流量使用进度条（需配置流量限额） |
 | `window.HidePlanInfo` | boolean | `false` | 隐藏套餐标签（IPv4/IPv6/带宽等） |
 
+### 已出机器过滤
+
+| 变量 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `window.ExcludeSoldServers` | boolean | `false` | 启用后，带 `已出` 标签的机器不参与在线/离线统计和地图点亮，在"全部"及其他分组中也不显示；切换到"已出"分组时仍可正常查看 |
+
+### 网络监控着色
+
+| 变量 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `window.ColorizeMonitorMetrics` | boolean | `false` | 对延迟、丢包率、波动值按阈值着色（绿/黄/红） |
+
+着色阈值：
+
+| 指标 | 绿色（优） | 黄色（一般） | 红色（差） |
+|------|-----------|-------------|-----------|
+| 延迟 | < 100 ms | 100 – 200 ms | > 200 ms |
+| 丢包率 | < 1% | 1% – 5% | > 5% |
+| 波动（Logistic） | < 0.25 | 0.25 – 0.50 | > 0.50 |
+
+波动值说明：取最近 60 个采样点（约 1 小时），计算 P95−P50 后经 Logistic 归一化（`k=30ms`），结果在 [0, 1)，`0.50` 对应尾部延迟展宽 30 ms。
+
 ### 示例
 
 ```html
@@ -93,5 +118,7 @@ window.ShowTrafficBar = true;
 window.MergeDetailAndNetwork = true;
 window.HidePlanInfo = true;
 window.DisableAnimatedMan = true;
+window.ExcludeSoldServers = true;
+window.ColorizeMonitorMetrics = true;
 </script>
 ```

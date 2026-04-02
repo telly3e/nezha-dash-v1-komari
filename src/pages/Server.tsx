@@ -12,7 +12,7 @@ import { useSort } from "@/hooks/use-sort"
 import { useStatus } from "@/hooks/use-status"
 import { useWebSocketContext } from "@/hooks/use-websocket-context"
 import { fetchServerGroup } from "@/lib/nezha-api"
-import { cn, formatNezhaInfo } from "@/lib/utils"
+import { cn, formatNezhaInfo, hasSoldTag } from "@/lib/utils"
 import { NezhaWebsocketResponse } from "@/types/nezha-api"
 import { ServerGroup } from "@/types/nezha-api"
 import { ArrowDownIcon, ArrowUpIcon, ArrowsUpDownIcon, MapIcon, ViewColumnsIcon } from "@heroicons/react/20/solid"
@@ -36,6 +36,9 @@ export default function Servers() {
   const [currentGroup, setCurrentGroup] = useState<string>("All")
 
   const customBackgroundImage = (window.CustomBackgroundImage as string) !== "" ? window.CustomBackgroundImage : undefined
+
+  // @ts-expect-error ExcludeSoldServers is a global variable
+  const excludeSoldServers = window.ExcludeSoldServers as boolean
 
   const restoreScrollPosition = () => {
     const savedPosition = sessionStorage.getItem("scrollPosition")
@@ -128,30 +131,38 @@ export default function Servers() {
       return !!group
     }) || []
 
-  const totalServers = filteredServers.length || 0
-  const onlineServers = filteredServers.filter((server) => formatNezhaInfo(nezhaWsData.now, server).online)?.length || 0
-  const offlineServers = filteredServers.filter((server) => !formatNezhaInfo(nezhaWsData.now, server).online)?.length || 0
+  // 统计数据始终排除"已出"标签的机器，不受当前分组影响
+  const statsServers = excludeSoldServers ? filteredServers.filter((server) => !hasSoldTag(server)) : filteredServers
+
+  const totalServers = statsServers.length || 0
+  const onlineServers = statsServers.filter((server) => formatNezhaInfo(nezhaWsData.now, server).online)?.length || 0
+  const offlineServers = statsServers.filter((server) => !formatNezhaInfo(nezhaWsData.now, server).online)?.length || 0
   const up =
-    filteredServers.reduce(
+    statsServers.reduce(
       (total, server) => (formatNezhaInfo(nezhaWsData.now, server).online ? total + (server.state?.net_out_transfer ?? 0) : total),
       0,
     ) || 0
   const down =
-    filteredServers.reduce(
+    statsServers.reduce(
       (total, server) => (formatNezhaInfo(nezhaWsData.now, server).online ? total + (server.state?.net_in_transfer ?? 0) : total),
       0,
     ) || 0
 
   const upSpeed =
-    filteredServers.reduce(
+    statsServers.reduce(
       (total, server) => (formatNezhaInfo(nezhaWsData.now, server).online ? total + (server.state?.net_out_speed ?? 0) : total),
       0,
     ) || 0
   const downSpeed =
-    filteredServers.reduce(
+    statsServers.reduce(
       (total, server) => (formatNezhaInfo(nezhaWsData.now, server).online ? total + (server.state?.net_in_speed ?? 0) : total),
       0,
     ) || 0
+
+  // 展示列表：仅在"已出"分组时保留已出机器，其他分组一律过滤掉
+  if (excludeSoldServers && currentGroup !== "已出") {
+    filteredServers = filteredServers.filter((server) => !hasSoldTag(server))
+  }
 
   filteredServers =
     status === "all"
@@ -331,7 +342,12 @@ export default function Servers() {
           </PopoverContent>
         </Popover>
       </div>
-      {showMap === "1" && <GlobalMap now={nezhaWsData.now} serverList={nezhaWsData?.servers || []} />}
+      {showMap === "1" && (
+        <GlobalMap
+          now={nezhaWsData.now}
+          serverList={excludeSoldServers ? (nezhaWsData?.servers || []).filter((s) => !hasSoldTag(s)) : nezhaWsData?.servers || []}
+        />
+      )}
       {inline === "1" && (
         <section ref={containerRef} className="flex flex-col gap-2 overflow-x-scroll scrollbar-hidden mt-6 server-inline-list">
           {filteredServers.map((serverInfo) => (

@@ -308,6 +308,15 @@ export function parsePublicNote(publicNote: string): PublicNoteData | null {
   }
 }
 
+// 检查服务器是否带有指定标签（默认检测"已出"标签）
+// 标签存储在 public_note.planDataMod.extra 中，以空格分隔
+export function hasSoldTag(server: NezhaServer, tagName: string = "已出"): boolean {
+  const note = parsePublicNote(server.public_note)
+  if (!note?.planDataMod?.extra) return false
+  const tags = note.planDataMod.extra.split(/\s+/).map((t) => t.trim()).filter(Boolean)
+  return tags.includes(tagName)
+}
+
 // Function to handle public_note with sessionStorage
 export function handlePublicNote(serverId: number, publicNote: string): string {
   const storageKey = `server_${serverId}_public_note`

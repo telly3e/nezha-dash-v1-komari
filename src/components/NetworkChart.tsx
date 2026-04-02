@@ -132,6 +132,37 @@ export function NetworkChart({ server_id, show }: { server_id: number; show: boo
   )
 }
 
+const getDelayColor = (delay: number): string => {
+  if (delay < 100) return "text-green-500"
+  if (delay < 200) return "text-yellow-500"
+  return "text-red-500"
+}
+
+const getPacketLossColor = (loss: number): string => {
+  if (loss < 1) return "text-green-500"
+  if (loss < 5) return "text-yellow-500"
+  return "text-red-500"
+}
+
+const getJitterColor = (jitter: number): string => {
+  if (jitter < 0.25) return "text-green-500"
+  if (jitter < 0.50) return "text-yellow-500"
+  return "text-red-500"
+}
+
+// Logistic 归一化波动：取最近 60 个有效样本（约 1 小时），结果在 [0, 1)
+// k=30 表示 P95-P50=30ms 时波动值为 0.50
+const calcJitter = (delays: number[]): number => {
+  const window = delays.filter((d) => d > 0).slice(-60)
+  if (window.length < 2) return 0
+  const sorted = [...window].sort((a, b) => a - b)
+  const p50 = sorted[Math.floor(sorted.length * 0.50)]
+  const p95 = sorted[Math.min(Math.floor(sorted.length * 0.95), sorted.length - 1)]
+  const diff = p95 - p50
+  const k = 30
+  return diff / (diff + k)
+}
+
 export const NetworkChartClient = React.memo(function NetworkChart({
   chartDataKey,
   chartConfig,
@@ -150,6 +181,9 @@ export const NetworkChartClient = React.memo(function NetworkChart({
   const customBackgroundImage = (window.CustomBackgroundImage as string) !== "" ? window.CustomBackgroundImage : undefined
 
   const forcePeakCutEnabled = (window.ForcePeakCutEnabled as boolean) ?? false
+
+  // @ts-expect-error ColorizeMonitorMetrics is a global variable
+  const colorizeMonitorMetrics = window.ColorizeMonitorMetrics as boolean
 
   // Change from string to string array for multi-selection
   const [activeCharts, setActiveCharts] = React.useState<string[]>([])
@@ -205,8 +239,13 @@ export const NetworkChartClient = React.memo(function NetworkChart({
         const packetLossData = monitorData.filter((item) => item.packet_loss !== undefined).map((item) => item.packet_loss!)
         const avgPacketLoss = packetLossData.length > 0 ? packetLossData.reduce((sum, loss) => sum + loss, 0) / packetLossData.length : null
 
+        // Logistic jitter over last ~1 hour (60 samples)
+        const allDelays = monitorData.map((item) => item.avg_delay)
+        const jitter = calcJitter(allDelays)
+
         return (
           <button
+            type="button"
             key={key}
             data-active={activeCharts.includes(key)}
             className={`relative z-30 flex cursor-pointer grow basis-0 flex-col justify-center gap-1 border-b border-neutral-200 dark:border-neutral-800 px-6 py-4 text-left data-[active=true]:bg-muted/50 sm:border-l sm:border-t-0 sm:px-6`}
@@ -214,13 +253,20 @@ export const NetworkChartClient = React.memo(function NetworkChart({
           >
             <span className="whitespace-nowrap text-xs text-muted-foreground">{key}</span>
             <div className="flex flex-col gap-0.5">
-              <span className="text-md font-bold leading-none sm:text-lg">{lastDelay.toFixed(2)}ms</span>
-              {avgPacketLoss !== null && <span className="text-xs text-muted-foreground">{avgPacketLoss.toFixed(2)}% avg loss</span>}
+              <span className="text-md font-bold leading-none sm:text-lg">
+                <span className={cn(colorizeMonitorMetrics && getDelayColor(lastDelay))}>{lastDelay.toFixed(1)}</span>ms
+              </span>
+              {avgPacketLoss !== null && (
+                <span className="text-xs text-muted-foreground">
+                  丢包 <span className={cn(colorizeMonitorMetrics && getPacketLossColor(avgPacketLoss))}>{avgPacketLoss.toFixed(1)}%</span>{" "}
+                  波动 <span className={cn(colorizeMonitorMetrics && getJitterColor(jitter))}>{jitter.toFixed(2)}</span>
+                </span>
+              )}
             </div>
           </button>
         )
       }),
-    [chartDataKey, activeCharts, chartData, handleButtonClick],
+    [chartDataKey, activeCharts, chartData, handleButtonClick, colorizeMonitorMetrics],
   )
 
   const chartElements = useMemo(() => {
@@ -424,6 +470,7 @@ export const NetworkChartClient = React.memo(function NetworkChart({
         <div className="relative">
           {activeCharts.length > 0 && (
             <button
+              type="button"
               className="absolute -top-2 right-1 z-10 text-xs px-2 py-1 bg-stone-100/80 dark:bg-stone-800/80 backdrop-blur-sm rounded-[5px] text-muted-foreground hover:text-foreground transition-colors"
               onClick={clearAllSelections}
             >
