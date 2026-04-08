@@ -23,58 +23,15 @@ interface ResultItem {
 /**
  * Helper method to calculate packet loss from delay data
  */
+/**
+ * Calculate packet loss from delay data.
+ * Since the API uses -1 for failed probes (filtered out before reaching here),
+ * all values in the delays array are valid responses (including 0 = sub-1ms).
+ * Without real per-point loss data, we simply return 0% for all points.
+ */
 const calculatePacketLoss = (delays: number[]): number[] => {
   if (!delays || delays.length === 0) return []
-
-  const packetLossRates: number[] = []
-  const windowSize = Math.min(10, Math.max(3, Math.floor(delays.length / 10)))
-  const timeoutThreshold = 3000
-  const extremeDelayThreshold = 10000
-
-  for (let i = 0; i < delays.length; i++) {
-    const currentDelay = delays[i]
-    let lossRate = 0
-
-    if (currentDelay === 0 || currentDelay === null || currentDelay === undefined) {
-      lossRate = 100
-    } else if (currentDelay >= extremeDelayThreshold) {
-      lossRate = Math.min(95, 60 + (currentDelay - extremeDelayThreshold) / 1000)
-    } else if (currentDelay >= timeoutThreshold) {
-      lossRate = Math.min(50, (currentDelay - timeoutThreshold) / 200)
-    } else {
-      const start = Math.max(0, i - Math.floor(windowSize / 2))
-      const end = Math.min(delays.length, i + Math.ceil(windowSize / 2))
-      const windowDelays = delays.slice(start, end).filter((d) => d > 0)
-
-      if (windowDelays.length > 2) {
-        const mean = windowDelays.reduce((sum, d) => sum + d, 0) / windowDelays.length
-        const variance = windowDelays.reduce((sum, d) => sum + (d - mean) ** 2, 0) / windowDelays.length
-        const standardDeviation = Math.sqrt(variance)
-        const coefficientOfVariation = standardDeviation / mean
-
-        if (coefficientOfVariation > 0.8) {
-          lossRate = Math.min(25, coefficientOfVariation * 15)
-        } else if (coefficientOfVariation > 0.5) {
-          lossRate = Math.min(10, coefficientOfVariation * 8)
-        } else if (coefficientOfVariation > 0.3) {
-          lossRate = Math.min(5, coefficientOfVariation * 5)
-        }
-
-        if (currentDelay > mean * 2.5) {
-          lossRate += Math.min(15, (currentDelay / mean - 2.5) * 10)
-        }
-      }
-    }
-
-    if (i > 0) {
-      const alpha = 0.3
-      lossRate = alpha * lossRate + (1 - alpha) * packetLossRates[i - 1]
-    }
-
-    packetLossRates.push(Math.max(0, Math.min(100, lossRate)))
-  }
-
-  return packetLossRates.map((rate) => Number(rate.toFixed(2)))
+  return delays.map(() => 0)
 }
 
 export function NetworkChart({ server_id, show }: { server_id: number; show: boolean }) {
@@ -254,7 +211,7 @@ export const NetworkChartClient = React.memo(function NetworkChart({
             <span className="whitespace-nowrap text-xs text-muted-foreground">{key}</span>
             <div className="flex flex-col gap-0.5">
               <span className="text-md font-bold leading-none sm:text-lg">
-                <span className={cn(colorizeMonitorMetrics && getDelayColor(lastDelay))}>{lastDelay.toFixed(1)}</span>ms
+                <span className={cn(colorizeMonitorMetrics && getDelayColor(lastDelay))}>{lastDelay === 0 ? "<1" : lastDelay.toFixed(1)}</span>ms
               </span>
               {avgPacketLoss !== null && (
                 <span className="text-xs text-muted-foreground">
@@ -538,15 +495,16 @@ export const NetworkChartClient = React.memo(function NetworkChart({
                       let formattedValue: string
                       let label: string
 
+                      const numValue = Number(value)
                       if (name === "packet_loss") {
-                        formattedValue = `${Number(value).toFixed(2)}%`
+                        formattedValue = `${numValue.toFixed(2)}%`
                         label = t("monitor.packetLoss", "Packet Loss")
                       } else if (name === "avg_delay") {
-                        formattedValue = `${Number(value).toFixed(2)}ms`
+                        formattedValue = numValue === 0 ? "<1ms" : `${numValue.toFixed(2)}ms`
                         label = t("monitor.avgDelay", "Avg Delay")
                       } else {
                         // For monitor names (in multi-chart view) - delay data
-                        formattedValue = `${Number(value).toFixed(2)}ms`
+                        formattedValue = numValue === 0 ? "<1ms" : `${numValue.toFixed(2)}ms`
                         label = name as string
                       }
 
@@ -580,8 +538,11 @@ const transformData = (data: NezhaMonitor[]) => {
       monitorData[monitorName] = []
     }
 
-    // Calculate packet loss from delay data if not provided
-    const packetLoss = item.packet_loss || calculatePacketLoss(item.avg_delay)
+    // Calculate packet loss from delay data if not provided or if length doesn't match
+    const packetLoss =
+      item.packet_loss && item.packet_loss.length === item.created_at.length
+        ? item.packet_loss
+        : calculatePacketLoss(item.avg_delay)
 
     for (let i = 0; i < item.created_at.length; i++) {
       monitorData[monitorName].push({
@@ -608,8 +569,11 @@ const formatData = (rawData: NezhaMonitor[]) => {
   rawData.forEach((item) => {
     const { monitor_name, created_at, avg_delay } = item
 
-    // Calculate packet loss if not provided
-    const packetLoss = item.packet_loss || calculatePacketLoss(avg_delay)
+    // Calculate packet loss if not provided or if length doesn't match
+    const packetLoss =
+      item.packet_loss && item.packet_loss.length === created_at.length
+        ? item.packet_loss
+        : calculatePacketLoss(avg_delay)
 
     allTimeArray.forEach((time) => {
       if (!result[time]) {

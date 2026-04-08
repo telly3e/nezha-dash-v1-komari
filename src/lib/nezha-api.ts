@@ -88,7 +88,7 @@ export const fetchMonitor = async (server_id: number): Promise<MonitorResponse> 
         server_name: serverName,
         created_at: [],
         avg_delay: [],
-        packet_loss: [task.loss??0],
+        packet_loss: [],
       })
     }
 
@@ -98,9 +98,16 @@ export const fetchMonitor = async (server_id: number): Promise<MonitorResponse> 
       const ts = Date.parse(rec.time)
       if (!Number.isFinite(ts)) continue
       const val = Number(rec.value)
-      if (!Number.isFinite(val) || val === -1) continue
+      if (!Number.isFinite(val)) continue
+      // val === -1 means probe failed (packet lost), record it with delay 0 and 100% loss
       s.created_at.push(ts)
-      s.avg_delay.push(val)
+      if (val === -1) {
+        s.avg_delay.push(0)
+        s.packet_loss!.push(100)
+      } else {
+        s.avg_delay.push(val)
+        s.packet_loss!.push(0)
+      }
     }
   } else if (Array.isArray(km_monitors)) {
     // 可能是纯 records 数组 [{ task_id, time, value, name? }]
@@ -115,15 +122,22 @@ export const fetchMonitor = async (server_id: number): Promise<MonitorResponse> 
           server_name: serverName,
           created_at: [],
           avg_delay: [],
+          packet_loss: [],
         })
       }
       const s = seriesByTask.get(id)!
       const ts = Date.parse(rec.time)
       if (!Number.isFinite(ts)) continue
       const val = Number(rec.value)
-      if (!Number.isFinite(val) || val === -1) continue
+      if (!Number.isFinite(val)) continue
       s.created_at.push(ts)
-      s.avg_delay.push(val)
+      if (val === -1) {
+        s.avg_delay.push(0)
+        s.packet_loss!.push(100)
+      } else {
+        s.avg_delay.push(val)
+        s.packet_loss!.push(0)
+      }
     }
   } else {
     // 未知结构，返回空
@@ -131,16 +145,16 @@ export const fetchMonitor = async (server_id: number): Promise<MonitorResponse> 
 
   // 每个序列按时间升序
   const data = Array.from(seriesByTask.values()).map((s) => {
-    const zip = s.created_at.map((t, i) => ({ t, v: s.avg_delay[i] }))
+    const zip = s.created_at.map((t, i) => ({ t, v: s.avg_delay[i], l: s.packet_loss?.[i] ?? 0 }))
     zip.sort((a, b) => a.t - b.t)
-    return { ...s, created_at: zip.map((z) => z.t), avg_delay: zip.map((z) => z.v) }
+    return { ...s, created_at: zip.map((z) => z.t), avg_delay: zip.map((z) => z.v), packet_loss: zip.map((z) => z.l) }
   })
 
   // 避免空的 avg_delay
   for (const s of data) {
     if (s.avg_delay.length == 0) {
-      s.packet_loss = seriesByTask.get(s.monitor_id)?.packet_loss || [0]
-      s.avg_delay = [-1]
+      s.packet_loss = [0]
+      s.avg_delay = [0]
       s.created_at = [Date.now()]
     }
   }
