@@ -17,7 +17,7 @@ import { Switch } from "./ui/switch"
 
 interface ResultItem {
   created_at: number
-  [key: string]: number
+  [key: string]: number | null
 }
 
 /**
@@ -190,14 +190,21 @@ export const NetworkChartClient = React.memo(function NetworkChart({
     () =>
       chartDataKey.map((key) => {
         const monitorData = chartData[key]
-        const lastDelay = monitorData[monitorData.length - 1].avg_delay
+        // Find latest valid (non-null) delay for display
+        let lastDelay: number | null = null
+        for (let i = monitorData.length - 1; i >= 0; i--) {
+          if (monitorData[i].avg_delay !== null) {
+            lastDelay = monitorData[i].avg_delay
+            break
+          }
+        }
 
         // Calculate average packet loss if available
         const packetLossData = monitorData.filter((item) => item.packet_loss !== undefined).map((item) => item.packet_loss!)
         const avgPacketLoss = packetLossData.length > 0 ? packetLossData.reduce((sum, loss) => sum + loss, 0) / packetLossData.length : null
 
         // Logistic jitter over last ~1 hour (60 samples)
-        const allDelays = monitorData.map((item) => item.avg_delay)
+        const allDelays = monitorData.map((item) => item.avg_delay).filter((d): d is number => d !== null)
         const jitter = calcJitter(allDelays)
 
         return (
@@ -211,7 +218,10 @@ export const NetworkChartClient = React.memo(function NetworkChart({
             <span className="whitespace-nowrap text-xs text-muted-foreground">{key}</span>
             <div className="flex flex-col gap-0.5">
               <span className="text-md font-bold leading-none sm:text-lg">
-                <span className={cn(colorizeMonitorMetrics && getDelayColor(lastDelay))}>{lastDelay === 0 ? "<1" : lastDelay.toFixed(1)}</span>ms
+                <span className={cn(colorizeMonitorMetrics && lastDelay !== null && getDelayColor(lastDelay))}>
+                  {lastDelay === null ? "--" : lastDelay === 0 ? "<1" : lastDelay.toFixed(1)}
+                </span>
+                ms
               </span>
               {avgPacketLoss !== null && (
                 <span className="text-xs text-muted-foreground">
@@ -251,11 +261,13 @@ export const NetworkChartClient = React.memo(function NetworkChart({
           dataKey="avg_delay"
           stroke={getColorByIndex(chart)}
           yAxisId="delay"
-          connectNulls={true}
+          connectNulls={false}
         />,
       )
     } else if (activeCharts.length > 1) {
-      // Multiple charts selected - show only delay lines for selected monitors
+      // Multiple charts selected. formatData interpolates across merged
+      // timestamps when a monitor is actively probing, and leaves null only
+      // for real offline gaps — so connectNulls=false safely produces breaks.
       elements.push(
         ...activeCharts.map((chart) => (
             <Line
@@ -267,14 +279,14 @@ export const NetworkChartClient = React.memo(function NetworkChart({
               dataKey={chart}
               stroke={getColorByIndex(chart)}
               name={chart}
-              connectNulls={true}
+              connectNulls={false}
               yAxisId="delay"
               hide={hiddenCharts.has(chart)}
             />
           )),
       )
     } else {
-      // No selection - show all charts (default view)
+      // No selection - show all charts (default view). Same rationale as above.
       elements.push(
         ...chartDataKey.map((key) => (
             <Line
@@ -285,7 +297,7 @@ export const NetworkChartClient = React.memo(function NetworkChart({
               dot={false}
               dataKey={key}
               stroke={getColorByIndex(key)}
-              connectNulls={true}
+              connectNulls={false}
               yAxisId="delay"
               hide={hiddenCharts.has(key)}
             />
@@ -528,6 +540,44 @@ export const NetworkChartClient = React.memo(function NetworkChart({
   )
 })
 
+/**
+ * Insert null-delay markers into gaps larger than ~3x the median sampling interval.
+ * This forces the chart to break the line when the agent was offline (no records reported).
+ */
+const insertGapMarkers = <T extends { created_at: number; avg_delay: number | null; packet_loss?: number }>(
+  points: T[],
+): T[] => {
+  if (points.length < 2) return points
+
+  const diffs: number[] = []
+  for (let i = 1; i < points.length; i++) {
+    const d = points[i].created_at - points[i - 1].created_at
+    if (d > 0) diffs.push(d)
+  }
+  if (diffs.length === 0) return points
+
+  const sorted = [...diffs].sort((a, b) => a - b)
+  const medianInterval = sorted[Math.floor(sorted.length / 2)]
+  const gapThreshold = Math.max(medianInterval * 3, 60_000)
+
+  const result: T[] = []
+  for (let i = 0; i < points.length; i++) {
+    if (i > 0) {
+      const gap = points[i].created_at - points[i - 1].created_at
+      if (gap > gapThreshold) {
+        result.push({
+          ...points[i - 1],
+          created_at: points[i - 1].created_at + medianInterval,
+          avg_delay: null,
+          packet_loss: 0,
+        } as T)
+      }
+    }
+    result.push(points[i])
+  }
+  return result
+}
+
 const transformData = (data: NezhaMonitor[]) => {
   const monitorData: ServerMonitorChart = {}
 
@@ -545,12 +595,17 @@ const transformData = (data: NezhaMonitor[]) => {
         : calculatePacketLoss(item.avg_delay)
 
     for (let i = 0; i < item.created_at.length; i++) {
+      const loss = packetLoss[i]
+      // When probe failed (loss === 100), delay should be null so the delay line breaks
+      const delay = loss === 100 ? null : item.avg_delay[i]
       monitorData[monitorName].push({
         created_at: item.created_at[i],
-        avg_delay: item.avg_delay[i],
-        packet_loss: packetLoss[i],
+        avg_delay: delay,
+        packet_loss: loss,
       })
     }
+
+    monitorData[monitorName] = insertGapMarkers(monitorData[monitorName])
   })
 
   return monitorData
@@ -575,19 +630,65 @@ const formatData = (rawData: NezhaMonitor[]) => {
         ? item.packet_loss
         : calculatePacketLoss(avg_delay)
 
+    // Build this monitor's own probe series (sorted) so we can distinguish
+    // "didn't probe at this exact merged timestamp" from "was offline".
+    const probes = created_at
+      .map((t, i) => ({ t, v: avg_delay[i], l: packetLoss?.[i] ?? 0 }))
+      .sort((a, b) => a.t - b.t)
+    const probeTimes = probes.map((p) => p.t)
+
+    // Compute median sampling interval for this monitor
+    const diffs: number[] = []
+    for (let i = 1; i < probes.length; i++) {
+      const d = probes[i].t - probes[i - 1].t
+      if (d > 0) diffs.push(d)
+    }
+    const sortedDiffs = [...diffs].sort((a, b) => a - b)
+    const medianInterval = sortedDiffs[Math.floor(sortedDiffs.length / 2)] || 60_000
+    const gapThreshold = Math.max(medianInterval * 3, 60_000)
+
     allTimeArray.forEach((time) => {
       if (!result[time]) {
         result[time] = { created_at: time }
       }
 
-      const timeIndex = created_at.indexOf(time)
-      // @ts-expect-error - avg_delay is an array
-      result[time][monitor_name] = timeIndex !== -1 ? avg_delay[timeIndex] : null
-      // Add packet loss data if available
-      if (packetLoss) {
-        // @ts-expect-error - packet_loss is calculated
-        result[time][`${monitor_name}_packet_loss`] = timeIndex !== -1 ? packetLoss[timeIndex] : null
+      // Binary search: find first probe index with time >= target
+      let lo = 0
+      let hi = probeTimes.length
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1
+        if (probeTimes[mid] < time) lo = mid + 1
+        else hi = mid
       }
+
+      let delay: number | null = null
+      let loss: number | null = null
+
+      if (lo < probeTimes.length && probeTimes[lo] === time) {
+        // Exact match: real probe
+        const p = probes[lo]
+        delay = p.l === 100 ? null : p.v
+        loss = p.l
+      } else if (lo > 0 && lo < probeTimes.length) {
+        // Between two probes
+        const prev = probes[lo - 1]
+        const next = probes[lo]
+        if (next.t - prev.t <= gapThreshold) {
+          // Normal interleaved timestamp → interpolate to keep line smooth
+          if (prev.l === 100 || next.l === 100) {
+            delay = null
+          } else {
+            const ratio = (time - prev.t) / (next.t - prev.t)
+            delay = prev.v + (next.v - prev.v) * ratio
+          }
+          loss = 0
+        }
+        // else: real gap (monitor was offline) → leave as null to break the line
+      }
+      // else: time is outside this monitor's probe range → null
+
+      result[time][monitor_name] = delay
+      result[time][`${monitor_name}_packet_loss`] = loss
     })
   })
 

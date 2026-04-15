@@ -86,7 +86,7 @@ export interface MonitorResponse {
 export type ServerMonitorChart = {
   [key: string]: {
     created_at: number
-    avg_delay: number
+    avg_delay: number | null
     packet_loss?: number
   }[]
 }
